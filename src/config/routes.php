@@ -22,7 +22,7 @@ return function (App $app) {
         $mng = $container->get('pdf');
 
         $listFields = $mng->listFields($file->getPath());
-        //$file->clear();
+        $file->clear();
         return $response->withJson(
             $listFields
         );
