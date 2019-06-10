@@ -17,12 +17,14 @@ return function (App $app) {
      */
     $app->post('/pdf/info', function(Request $request, Response $response) use ($container) {
         $data = $request->getParams();
-        $path = File::b64ToFile($data['pdf']);
+        $file = new File($data['pdf']);
 
         $mng = $container->get('pdf');
 
+        $listFields = $mng->listFields($file->getPath());
+        //$file->clear();
         return $response->withJson(
-            $mng->listFields($path)
+            $listFields
         );
 
     });
@@ -40,15 +42,16 @@ return function (App $app) {
      */
     $app->post('/pdf', function(Request $request, Response $response) use ($container) {
         $data = $request->getParams();
-        $path = File::b64ToFile($data['pdf']);
+        $file = new File($data['pdf']);
 
         $mng = $container->get('pdf');
 
+        $rawPdf = $mng->fillPdf($file->getPath(), $data['fields']);
+        $file->clear();
         return $response->withHeader('Content-type', 'application/pdf')
             ->withHeader('Content-Disposition', 'attachment;filename=downloaded.pdf')
-            ->write($mng->fillPdf($path, $data['fields']));
+            ->write($rawPdf);
     });
-
 
     /**
      * POST : /pdf/json
@@ -62,7 +65,7 @@ return function (App $app) {
      */
     $app->post('/pdf/json', function(Request $request, Response $response) use ($container) {
         $data = $request->getParams();
-        $path = File::b64ToFile($data['pdf']);
+        $file = new File($data['pdf']);
 
 
         $mng = $container->get('pdf');
@@ -70,12 +73,12 @@ return function (App $app) {
         // Generate an unique ID
         $key = Uuid::uuid4()->toString();
 
-        $pdf = $mng->fillPdf($path, $data['fields']);
+        $pdf = $mng->fillPdf($file->getPath(), $data['fields']);
 
         /** @var Redis $redis */
         $redis = $container->get('redis');
         $redis->setex($key, 3600, $pdf);
-
+        $file->clear();
         return $response->withJson([
             'url' => sprintf('/pdf/download/%s', $key)
         ]);
