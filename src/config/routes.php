@@ -42,6 +42,8 @@ return function (App $app) {
      */
     $app->post('/pdf', function(Request $request, Response $response) use ($container) {
         $data = $request->getParams();
+
+        $filename = (isset($data['filename']) && mb_strlen($data['filename']) > 3) ? $data['filename'] : 'downloaded';
         $file = new File($data['pdf']);
 
         $mng = $container->get('pdf');
@@ -49,7 +51,7 @@ return function (App $app) {
         $rawPdf = $mng->fillPdf($file->getPath(), $data['fields']);
         $file->clear();
         return $response->withHeader('Content-type', 'application/pdf')
-            ->withHeader('Content-Disposition', 'attachment;filename=downloaded.pdf')
+            ->withHeader('Content-Disposition', sprintf('attachment;filename=%s.pdf', $filename))
             ->write($rawPdf);
     });
 
@@ -65,6 +67,8 @@ return function (App $app) {
      */
     $app->post('/pdf/json', function(Request $request, Response $response) use ($container) {
         $data = $request->getParams();
+
+        $filename = (isset($data['filename']) && mb_strlen($data['filename']) > 3) ? $data['filename'] : 'downloaded';
         $file = new File($data['pdf']);
 
 
@@ -75,9 +79,14 @@ return function (App $app) {
 
         $pdf = $mng->fillPdf($file->getPath(), $data['fields']);
 
+        $redisData = serialize([
+           'filename' => $filename,
+           'data' => $pdf
+        ]);
+
         /** @var Redis $redis */
         $redis = $container->get('redis');
-        $redis->setex($key, 3600, $pdf);
+        $redis->setex($key, 3600, $redisData);
         $file->clear();
         return $response->withJson([
             'url' => sprintf('/pdf/download/%s', $key)
@@ -97,9 +106,11 @@ return function (App $app) {
             return $response->withStatus(404);
         }
 
+        $pdfData = unserialize($redis->get($args['pdf']));
+
         return $response->withHeader('Content-type', 'application/pdf')
-            ->withHeader('Content-Disposition', 'attachment;filename=downloaded.pdf')
-            ->write($redis->get($args['pdf']));
+            ->withHeader('Content-Disposition', sprintf('attachment;filename=%s.pdf', $pdfData['filename']))
+            ->write($pdfData['data']);
 
     });
 };
